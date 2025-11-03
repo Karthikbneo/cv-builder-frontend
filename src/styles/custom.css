@@ -4,3 +4,19 @@ html, body, #root { height: 100%; }
 .badge-skill { font-weight: 500; }
 .cv-preview { border: 1px dashed #dee2e6; border-radius: .5rem; padding: 1rem; background: #fff; }
 .fixed-cta { position: sticky; bottom: 0; background: #fff; padding: .75rem; border-top: 1px solid #eee; }
+
+/* Hero styles */
+.hero-section {
+	background: linear-gradient(135deg, #0f172a 0%, #2563eb 60%, #60a5fa 100%);
+	color: #fff;
+}
+.hero-illustration { background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)); padding: 18px; }
+.text-white-75 { color: rgba(255,255,255,0.85) !important; }
+
+/* CTA section tweaks */
+.cta-section { background: linear-gradient(90deg,#f8fafc 0%, #eef2ff 100%); }
+.cta-section .btn-primary { background-color: #2563eb; border-color: #2563eb; }
+
+@media (max-width: 767px) {
+	.hero-illustration img { max-width: 320px !important; }
+}

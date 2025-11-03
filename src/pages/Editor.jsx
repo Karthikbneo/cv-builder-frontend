@@ -6,6 +6,7 @@ import api from "../services/api.js";
 import CVForm from "../components/CVForm.jsx";
 import CVPreview from "../components/CVPreview.jsx";
 import SaveReminderToast from "../components/SaveReminderToast.jsx";
+import Toast from "../components/Toast.jsx";
 import useBeforeUnload from "../hooks/useBeforeUnload.js";
 import PayDialog from "../components/PayDialog.jsx";
 
@@ -37,6 +38,7 @@ export default function Editor() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(!!id);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "info" });
 
   const isEdit = Boolean(id);
 
@@ -132,6 +134,7 @@ export default function Editor() {
         setCv(data);
         setLoadedId(data._id);
         lastSavedRef.current = JSON.stringify(data);
+        setToast({ message: "CV saved successfully!", type: "success" });
         return data;
       } else {
         const { data } = await api.post(`/api/v1/cvs`, cleaned);
@@ -139,10 +142,13 @@ export default function Editor() {
         setLoadedId(data._id);
         lastSavedRef.current = JSON.stringify(data);
         nav(`/editor/${data._id}`, { replace: true });
+        setToast({ message: "CV created successfully!", type: "success" });
         return data;
       }
     } catch (e) {
-      setError(e?.response?.data?.message || "Save failed");
+      const msg = e?.response?.data?.message || "Failed to save CV";
+      setError(msg);
+      setToast({ message: msg, type: "error" });
       throw e;
     } finally {
       setSaving(false);
@@ -477,6 +483,13 @@ export default function Editor() {
 
       {/* Gentle reminder (toast) */}
       <SaveReminderToast show={dirty} />
+
+      {/* Save success/error toast */}
+      <Toast 
+        message={toast.message} 
+        type={toast.type} 
+        onClose={() => setToast({ message: "", type: "info" })}
+      />
 
       {/* Payment Modals */}
       <PayDialog

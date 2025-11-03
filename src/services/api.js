@@ -1,19 +1,19 @@
 import axios from 'axios'
 
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:4000',
-  withCredentials: true
+  withCredentials: true,
 })
 
-let accessToken = ''
-let refreshToken = localStorage.getItem('auth:refresh') || ''
+
+
 let isRefreshing = false
 let pending = []
 
-api.setToken = (t) => { accessToken = t }
-
 api.interceptors.request.use((config) => {
-  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
+  // make sure credentials are sent
+  config.withCredentials = true
   return config
 })
 
@@ -21,39 +21,34 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config
-    if (error.response?.status === 401 && !original._retry && refreshToken) {
+    if (error.response?.status === 401 && !original?._retry) {
       try {
         original._retry = true
 
-     
         if (isRefreshing) {
+          // wait for ongoing refresh
           await new Promise((resolve) => pending.push(resolve))
         } else {
           isRefreshing = true
-          const { data } = await axios.post(
-            `${api.defaults.baseURL}/api/v1/auth/refresh`,
-            { token: refreshToken }
-          )
-          accessToken = data.access
-          localStorage.setItem('auth:access', accessToken)
+          // call refresh endpoint — server will read refresh cookie and set a new access cookie
+          await axios.post(`${api.defaults.baseURL}/api/v1/auth/refresh`, null, {
+            withCredentials: true,
+          })
           pending.forEach((r) => r())
           pending = []
           isRefreshing = false
         }
 
-      
-        original.headers = original.headers || {}
-        original.headers.Authorization = `Bearer ${accessToken}`
+        // retry original request — cookies will be sent automatically
+        original.withCredentials = true
         return api(original)
       } catch (e) {
         isRefreshing = false
         pending = []
-  
-        localStorage.removeItem('auth:user')
-        localStorage.removeItem('auth:access')
-        localStorage.removeItem('auth:refresh')
-        accessToken = ''
-        refreshToken = ''
+        // If refresh fails, clear any client-side user hints (if present)
+        try {
+          localStorage.removeItem('auth:user')
+        } catch (_) {}
       }
     }
     return Promise.reject(error)

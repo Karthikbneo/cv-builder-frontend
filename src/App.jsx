@@ -27,7 +27,6 @@ function Protected({ children }) {
   return children;
 }
 
-// ✅ Custom wrapper to conditionally show Navbar
 function AppContent() {
   const location = useLocation();
   const hideNavbar = ["/login", "/register"].includes(location.pathname);
