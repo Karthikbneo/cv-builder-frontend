@@ -13,6 +13,9 @@ import Layouts from "./pages/Layouts.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import Home from "./pages/Home.jsx";
 import PublicView from "./pages/PublicView.jsx";
+import OAuthSuccess from './pages/OAuthSuccess.jsx';
+
+
 
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 
@@ -34,6 +37,7 @@ function AppContent() {
       {!hideNavbar && <Navbar />}
       <div className="container-fluid p-0">
         <Routes>
+          <Route path="/oauth-success" element={<OAuthSuccess />} />
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

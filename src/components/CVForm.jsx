@@ -1,12 +1,20 @@
 // src/components/CVForm.jsx
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import api from "../services/api.js";
 
 export default function CVForm({ value, onChange, onUpload }) {
   const [step, setStep] = useState(1);
-  const v = value || {};
+  const [errs, setErrs] = useState({});
+  const v = value || {
+    profile: {},
+    education: [],
+    experience: [],
+    projects: [],
+    skills: [],
+    socials: [],
+  };
 
-  // --- helpers ---------------------------------------------------------------
+  // ---------------- helpers ----------------
   const update = (path, val) => {
     const next = structuredClone(v);
     const keys = path.split(".");
@@ -16,8 +24,10 @@ export default function CVForm({ value, onChange, onUpload }) {
     onChange(next);
   };
 
-  const addItem = (key, item = {}) => onChange({ ...v, [key]: [...(v[key] || []), item] });
-  const delItem = (key, idx) => onChange({ ...v, [key]: (v[key] || []).filter((_, i) => i !== idx) });
+  const addItem = (key, item = {}) =>
+    onChange({ ...v, [key]: [...(v[key] || []), item] });
+  const delItem = (key, idx) =>
+    onChange({ ...v, [key]: (v[key] || []).filter((_, i) => i !== idx) });
 
   const setArray = (key, idx, patch) => {
     const arr = [...(v[key] || [])];
@@ -40,19 +50,99 @@ export default function CVForm({ value, onChange, onUpload }) {
     onUpload?.(data.url);
   };
 
+  // ---------------- validation ----------------
+  const setFieldError = (key, msg) =>
+    setErrs((e) => ({ ...e, [key]: msg || undefined }));
+
+  const emailOk = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
+  const urlOk = (s) => /^https?:\/\/[^\s]+$/i.test(String(s || "").trim());
+
+  const validateStep = (s = step) => {
+    const next = {};
+
+    if (s === 1) {
+      if (!v.profile?.name?.trim()) next["profile.name"] = "Name is required";
+      if (!v.profile?.email?.trim()) next["profile.email"] = "Email is required";
+      else if (!emailOk(v.profile.email)) next["profile.email"] = "Invalid email";
+    }
+
+    if (s === 2) {
+      (v.education || []).forEach((e, i) => {
+        if (!e.degree?.trim()) next[`education.${i}.degree`] = "Required";
+        if (!e.institution?.trim())
+          next[`education.${i}.institution`] = "Required";
+        if (e.percentage !== undefined && e.percentage !== "") {
+          const n = Number(e.percentage);
+          if (Number.isNaN(n) || n < 0 || n > 100)
+            next[`education.${i}.percentage`] = "0–100 only";
+        }
+      });
+    }
+
+    if (s === 3) {
+      (v.experience || []).forEach((x, i) => {
+        if (!x.organization?.trim())
+          next[`experience.${i}.organization`] = "Required";
+        if (!x.position?.trim()) next[`experience.${i}.position`] = "Required";
+        if (x.ctc !== undefined && x.ctc !== "") {
+          const n = Number(x.ctc);
+          if (Number.isNaN(n) || n < 0) next[`experience.${i}.ctc`] = "Must be ≥ 0";
+        }
+      });
+    }
+
+    if (s === 4) {
+      (v.projects || []).forEach((p, i) => {
+        if (!p.title?.trim()) next[`projects.${i}.title`] = "Required";
+      });
+    }
+
+    if (s === 5) {
+      (v.skills || []).forEach((p, i) => {
+        if (!p.name?.trim()) next[`skills.${i}.name`] = "Required";
+        const lvl = Number(p.level ?? 0);
+        if (Number.isNaN(lvl) || lvl < 0 || lvl > 100) next[`skills.${i}.level`] = "0–100 only";
+      });
+    }
+
+    if (s === 6) {
+      (v.socials || []).forEach((soc, i) => {
+        if (!soc.platform?.trim())
+          next[`socials.${i}.platform`] = "Required";
+        if (!soc.url?.trim()) {
+          next[`socials.${i}.url`] = "Profile URL is required";
+        } else if (!urlOk(normUrl(soc.url))) {
+          next[`socials.${i}.url`] = "Invalid URL";
+        }
+      });
+    }
+
+    setErrs(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const goNext = () => {
+    if (validateStep(step)) setStep((s) => Math.min(6, s + 1));
+  };
+  const goPrev = () => setStep((s) => Math.max(1, s - 1));
+
   const steps = useMemo(
     () => [
       { id: 1, label: "Basic" },
-      { id: 2, label: "Education" },
-      { id: 3, label: "Experience" },
-      { id: 4, label: "Projects" },
-      { id: 5, label: "Skills" },
-      { id: 6, label: "Socials" },
+      { id: 2, label: "Education", count: v.education?.length || 0 },
+      { id: 3, label: "Experience", count: v.experience?.length || 0 },
+      { id: 4, label: "Projects", count: v.projects?.length || 0 },
+      { id: 5, label: "Skills", count: v.skills?.length || 0 },
+      { id: 6, label: "Socials", count: v.socials?.length || 0 },
     ],
-    []
+    [v.education, v.experience, v.projects, v.skills, v.socials]
   );
 
-  // --- UI --------------------------------------------------------------------
+  const hasErr = (key) => Boolean(errs[key]);
+  const msg = (key) =>
+    hasErr(key) ? <div className="invalid-feedback d-block">{errs[key]}</div> : null;
+
+  // ---------------- UI ----------------
   return (
     <div>
       <ul className="nav nav-pills mb-3 flex-wrap">
@@ -60,10 +150,15 @@ export default function CVForm({ value, onChange, onUpload }) {
           <li key={s.id} className="nav-item me-1 mb-1">
             <button
               type="button"
-              className={"nav-link " + (step === s.id ? "active" : "")}
-              onClick={() => setStep(s.id)}
+              className={"nav-link d-flex align-items-center " + (step === s.id ? "active" : "")}
+              onClick={() => {
+                if (s.id < step || validateStep(step)) setStep(s.id);
+              }}
             >
-              {s.label}
+              <span>{s.label}</span>
+              {typeof s.count === "number" && (
+                <span className="badge bg-light text-dark ms-2">{s.count}</span>
+              )}
             </button>
           </li>
         ))}
@@ -73,24 +168,28 @@ export default function CVForm({ value, onChange, onUpload }) {
       {step === 1 && (
         <div className="row g-3">
           <div className="col-md-6">
-            <label className="form-label">Full Name</label>
+            <label className="form-label">Full Name *</label>
             <input
-              className="form-control"
+              className={"form-control " + (hasErr("profile.name") ? "is-invalid" : "")}
               placeholder="John Doe"
               value={v.profile?.name || ""}
+              onBlur={() => validateStep(1)}
               onChange={(e) => update("profile.name", e.target.value)}
             />
+            {msg("profile.name")}
           </div>
           <div className="col-md-6">
-            <label className="form-label">Email</label>
+            <label className="form-label">Email *</label>
             <input
-              className="form-control"
               type="email"
+              className={"form-control " + (hasErr("profile.email") ? "is-invalid" : "")}
               placeholder="you@example.com"
               value={v.profile?.email || ""}
+              onBlur={() => validateStep(1)}
               onChange={(e) => update("profile.email", e.target.value)}
               autoComplete="email"
             />
+            {msg("profile.email")}
           </div>
           <div className="col-md-6">
             <label className="form-label">Phone</label>
@@ -120,32 +219,6 @@ export default function CVForm({ value, onChange, onUpload }) {
               onChange={(e) => update("profile.summary", e.target.value)}
             />
           </div>
-          <div className="col-md-8">
-            <label className="form-label">Profile Image</label>
-            <input
-              className="form-control"
-              type="file"
-              accept="image/*"
-              onChange={(e) => uploadImage(e.target.files?.[0])}
-            />
-            {v.profile?.imageUrl && (
-              <small className="text-success d-block mt-1">
-                Uploaded: {v.profile.imageUrl}
-              </small>
-            )}
-          </div>
-          <div className="col-md-4 d-flex align-items-end">
-            {v.profile?.imageUrl ? (
-              <img
-                src={v.profile.imageUrl}
-                alt="Profile"
-                className="img-thumbnail ms-auto"
-                style={{ maxHeight: 72, objectFit: "cover" }}
-              />
-            ) : (
-              <div className="text-muted small ms-auto">No image</div>
-            )}
-          </div>
         </div>
       )}
 
@@ -157,7 +230,15 @@ export default function CVForm({ value, onChange, onUpload }) {
             <button
               type="button"
               className="btn btn-sm btn-outline-primary"
-              onClick={() => addItem("education", { degree: "", institution: "", start: "", end: "", percentage: "" })}
+              onClick={() =>
+                addItem("education", {
+                  degree: "",
+                  institution: "",
+                  start: "",
+                  end: "",
+                  percentage: "",
+                })
+              }
             >
               Add
             </button>
@@ -168,19 +249,30 @@ export default function CVForm({ value, onChange, onUpload }) {
               <div className="row g-2">
                 <div className="col-md-6">
                   <input
-                    className="form-control"
-                    placeholder="Degree"
+                    className={
+                      "form-control " + (hasErr(`education.${i}.degree`) ? "is-invalid" : "")
+                    }
+                    placeholder="Degree *"
                     value={e.degree || ""}
+                    onBlur={() => validateStep(2)}
                     onChange={(ev) => setArray("education", i, { degree: ev.target.value })}
                   />
+                  {msg(`education.${i}.degree`)}
                 </div>
                 <div className="col-md-6">
                   <input
-                    className="form-control"
-                    placeholder="Institution"
+                    className={
+                      "form-control " +
+                      (hasErr(`education.${i}.institution`) ? "is-invalid" : "")
+                    }
+                    placeholder="Institution *"
                     value={e.institution || ""}
-                    onChange={(ev) => setArray("education", i, { institution: ev.target.value })}
+                    onBlur={() => validateStep(2)}
+                    onChange={(ev) =>
+                      setArray("education", i, { institution: ev.target.value })
+                    }
                   />
+                  {msg(`education.${i}.institution`)}
                 </div>
                 <div className="col-md-3">
                   <input
@@ -205,11 +297,18 @@ export default function CVForm({ value, onChange, onUpload }) {
                     type="number"
                     min="0"
                     max="100"
-                    className="form-control"
+                    className={
+                      "form-control " +
+                      (hasErr(`education.${i}.percentage`) ? "is-invalid" : "")
+                    }
                     placeholder="%"
                     value={e.percentage || ""}
-                    onChange={(ev) => setArray("education", i, { percentage: ev.target.value })}
+                    onBlur={() => validateStep(2)}
+                    onChange={(ev) =>
+                      setArray("education", i, { percentage: ev.target.value })
+                    }
                   />
+                  {msg(`education.${i}.percentage`)}
                 </div>
                 <div className="col-md-3 text-end">
                   <button
@@ -255,19 +354,31 @@ export default function CVForm({ value, onChange, onUpload }) {
               <div className="row g-2">
                 <div className="col-md-6">
                   <input
-                    className="form-control"
-                    placeholder="Organization"
+                    className={
+                      "form-control " +
+                      (hasErr(`experience.${i}.organization`) ? "is-invalid" : "")
+                    }
+                    placeholder="Organization *"
                     value={x.organization || ""}
-                    onChange={(ev) => setArray("experience", i, { organization: ev.target.value })}
+                    onBlur={() => validateStep(3)}
+                    onChange={(ev) =>
+                      setArray("experience", i, { organization: ev.target.value })
+                    }
                   />
+                  {msg(`experience.${i}.organization`)}
                 </div>
                 <div className="col-md-6">
                   <input
-                    className="form-control"
-                    placeholder="Position"
+                    className={
+                      "form-control " +
+                      (hasErr(`experience.${i}.position`) ? "is-invalid" : "")
+                    }
+                    placeholder="Position *"
                     value={x.position || ""}
+                    onBlur={() => validateStep(3)}
                     onChange={(ev) => setArray("experience", i, { position: ev.target.value })}
                   />
+                  {msg(`experience.${i}.position`)}
                 </div>
                 <div className="col-md-4">
                   <input
@@ -280,11 +391,15 @@ export default function CVForm({ value, onChange, onUpload }) {
                 <div className="col-md-4">
                   <input
                     type="number"
-                    className="form-control"
+                    className={
+                      "form-control " + (hasErr(`experience.${i}.ctc`) ? "is-invalid" : "")
+                    }
                     placeholder="CTC (₹)"
                     value={x.ctc || ""}
+                    onBlur={() => validateStep(3)}
                     onChange={(ev) => setArray("experience", i, { ctc: ev.target.value })}
                   />
+                  {msg(`experience.${i}.ctc`)}
                 </div>
                 <div className="col-md-2">
                   <input
@@ -304,21 +419,25 @@ export default function CVForm({ value, onChange, onUpload }) {
                     onChange={(ev) => setArray("experience", i, { end: ev.target.value })}
                   />
                 </div>
+
+                {/* --- Technologies as tags --- */}
                 <div className="col-12">
-                  <input
-                    className="form-control"
-                    placeholder="Technologies (comma separated)"
-                    value={(x.technologies || []).join(", ")}
-                    onChange={(ev) =>
+                  <label className="form-label small text-muted">Technologies</label>
+                  <TechTags
+                    value={x.technologies || []}
+                    onAdd={(tech) =>
                       setArray("experience", i, {
-                        technologies: ev.target.value
-                          .split(",")
-                          .map((t) => t.trim())
-                          .filter(Boolean),
+                        technologies: [...(x.technologies || []), tech],
+                      })
+                    }
+                    onRemove={(idx) =>
+                      setArray("experience", i, {
+                        technologies: (x.technologies || []).filter((_, t) => t !== idx),
                       })
                     }
                   />
                 </div>
+
                 <div className="col-12 text-end">
                   <button
                     type="button"
@@ -342,7 +461,15 @@ export default function CVForm({ value, onChange, onUpload }) {
             <button
               type="button"
               className="btn btn-sm btn-outline-primary"
-              onClick={() => addItem("projects", { title: "", teamSize: "", duration: "", technologies: [], description: "" })}
+              onClick={() =>
+                addItem("projects", {
+                  title: "",
+                  teamSize: "",
+                  duration: "",
+                  technologies: [],
+                  description: "",
+                })
+              }
             >
               Add
             </button>
@@ -353,11 +480,15 @@ export default function CVForm({ value, onChange, onUpload }) {
               <div className="row g-2">
                 <div className="col-md-6">
                   <input
-                    className="form-control"
-                    placeholder="Title"
+                    className={
+                      "form-control " + (hasErr(`projects.${i}.title`) ? "is-invalid" : "")
+                    }
+                    placeholder="Title *"
                     value={p.title || ""}
+                    onBlur={() => validateStep(4)}
                     onChange={(ev) => setArray("projects", i, { title: ev.target.value })}
                   />
+                  {msg(`projects.${i}.title`)}
                 </div>
                 <div className="col-md-3">
                   <input
@@ -435,24 +566,34 @@ export default function CVForm({ value, onChange, onUpload }) {
               <div className="row g-2 align-items-center">
                 <div className="col-md-6">
                   <input
-                    className="form-control"
-                    placeholder="Skill"
+                    className={
+                      "form-control " + (hasErr(`skills.${i}.name`) ? "is-invalid" : "")
+                    }
+                    placeholder="Skill *"
                     value={s.name || ""}
+                    onBlur={() => validateStep(5)}
                     onChange={(ev) => setArray("skills", i, { name: ev.target.value })}
                   />
+                  {msg(`skills.${i}.name`)}
                 </div>
                 <div className="col-md-4">
                   <input
                     type="range"
-                    className="form-range"
+                    className={
+                      "form-range " + (hasErr(`skills.${i}.level`) ? "is-invalid" : "")
+                    }
                     min="0"
                     max="100"
-                    value={s.level || 0}
-                    onChange={(ev) => setArray("skills", i, { level: Number(ev.target.value) })}
+                    value={s.level ?? 0}
+                    onBlur={() => validateStep(5)}
+                    onChange={(ev) =>
+                      setArray("skills", i, { level: Number(ev.target.value) })
+                    }
                   />
+                  {msg(`skills.${i}.level`)}
                 </div>
                 <div className="col-md-2 text-end">
-                  <span className="badge text-bg-secondary">{s.level || 0}%</span>
+                  <span className="badge text-bg-secondary">{s.level ?? 0}%</span>
                 </div>
                 <div className="col-12 text-end">
                   <button
@@ -487,26 +628,51 @@ export default function CVForm({ value, onChange, onUpload }) {
             <div key={i} className="border rounded p-2 mb-2">
               <div className="row g-2 align-items-end">
                 <div className="col-md-4">
-                  <label className="form-label small text-muted">Platform</label>
+                  <label className="form-label small text-muted">Platform *</label>
                   <select
-                    className="form-select"
+                    className={
+                      "form-select " + (hasErr(`socials.${i}.platform`) ? "is-invalid" : "")
+                    }
                     value={s.platform || "LinkedIn"}
+                    onBlur={() => validateStep(6)}
                     onChange={(ev) => setArray("socials", i, { platform: ev.target.value })}
                   >
-                    {["LinkedIn", "Twitter/X", "GitHub", "GitLab", "Stack Overflow", "Dribbble", "Behance", "Medium", "Skype", "Portfolio", "Other"].map((p) => (
-                      <option key={p} value={p}>{p}</option>
+                    {[
+                      "LinkedIn",
+                      "Twitter/X",
+                      "GitHub",
+                      "GitLab",
+                      "Stack Overflow",
+                      "Dribbble",
+                      "Behance",
+                      "Medium",
+                      "Skype",
+                      "Portfolio",
+                      "Other",
+                    ].map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
                     ))}
                   </select>
+                  {msg(`socials.${i}.platform`)}
                 </div>
                 <div className="col-md-7">
                   <label className="form-label small text-muted">Profile URL</label>
                   <input
-                    className="form-control"
+                    className={
+                      "form-control " + (hasErr(`socials.${i}.url`) ? "is-invalid" : "")
+                    }
                     placeholder="https://linkedin.com/in/username"
                     value={s.url || ""}
                     onChange={(ev) => setArray("socials", i, { url: ev.target.value })}
-                    onBlur={(ev) => setArray("socials", i, { url: normUrl(ev.target.value) })}
+                    onBlur={(ev) => {
+                      const normalized = normUrl(ev.target.value);
+                      setArray("socials", i, { url: normalized });
+                      validateStep(6);
+                    }}
                   />
+                  {msg(`socials.${i}.url`)}
                 </div>
                 <div className="col-md-1 d-grid">
                   <button
@@ -527,6 +693,68 @@ export default function CVForm({ value, onChange, onUpload }) {
           )}
         </div>
       )}
+
+      {/* Step nav */}
+      <div className="d-flex justify-content-between mt-3">
+        <button type="button" className="btn btn-outline-secondary" onClick={goPrev}>
+          Previous
+        </button>
+        <button type="button" className="btn btn-primary" onClick={goNext}>
+          Next
+        </button>
+      </div>
     </div>
+  );
+}
+
+/* ------------------------ Reusable TechTags input ------------------------ */
+function TechTags({ value, onAdd, onRemove }) {
+  const inputRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    // add on Enter
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const t = e.currentTarget.value.trim();
+      if (!t) return;
+      if (!value?.includes(t)) onAdd?.(t);
+      e.currentTarget.value = "";
+    }
+    // backspace to remove last when empty
+    if (e.key === "Backspace" && !e.currentTarget.value && value?.length) {
+      onRemove?.(value.length - 1);
+    }
+  };
+
+  return (
+    <>
+      <div className="d-flex flex-wrap gap-2 mb-2">
+        {(value || []).map((t, i) => (
+          <span key={`${t}-${i}`} className="badge bg-secondary position-relative">
+            {t}
+            <button
+              type="button"
+              className="btn-close btn-close-white btn-sm ms-2"
+              aria-label={`Remove ${t}`}
+              style={{
+                fontSize: "0.55rem",
+                position: "absolute",
+                top: "-4px",
+                right: "-6px",
+              }}
+              onClick={() => onRemove?.(i)}
+            />
+          </span>
+        ))}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="text"
+        className="form-control"
+        placeholder="Type a technology and press Enter (e.g. React)"
+        onKeyDown={handleKeyDown}
+      />
+    </>
   );
 }

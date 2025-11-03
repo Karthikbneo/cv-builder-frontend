@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api.js";
@@ -7,6 +7,7 @@ import PayDialog from "../components/PayDialog.jsx";
 
 export default function Dashboard() {
   const [cvs, setCvs] = useState([]);
+  const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [moreLoading, setMoreLoading] = useState(false);
@@ -41,6 +42,8 @@ export default function Dashboard() {
       (nextCursor ? setMoreLoading : setLoading)(false);
     }
   };
+
+  const refresh = useCallback(() => load(null), []);
 
   useEffect(() => {
     load(null);
@@ -80,14 +83,34 @@ export default function Dashboard() {
       transition={{ duration: 0.35 }}
     >
       {/* Header */}
-      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3">
-        <div>
-          <h3 className="mb-0">Your CVs</h3>
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2 mb-3">
+        <div style={{ minWidth: 0 }}>
+          <h3 className="mb-1">Your CVs</h3>
           <div className="text-muted small">Create, edit, download and share your resumes</div>
         </div>
-        <Link to="/editor" className="btn btn-primary">
-          <i className="bi bi-plus-lg me-1" /> Create New
-        </Link>
+
+        <div className="d-flex gap-2 align-items-center w-100 w-md-auto">
+          <div className="input-group me-2" style={{ minWidth: 220 }}>
+            <span className="input-group-text bg-white border-end-0"><i className="bi bi-search"/></span>
+            <input
+              className="form-control border-start-0"
+              placeholder="Search by name, email or city"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button className="btn btn-outline-secondary" onClick={() => setQuery("")}>Clear</button>
+            )}
+          </div>
+
+          <button className="btn btn-outline-secondary" onClick={refresh} title="Refresh list">
+            <i className="bi bi-arrow-clockwise me-1" /> Refresh
+          </button>
+
+          <Link to="/editor" className="btn btn-primary">
+            <i className="bi bi-plus-lg me-1" /> Create
+          </Link>
+        </div>
       </div>
 
       {/* Error */}
@@ -125,6 +148,9 @@ export default function Dashboard() {
 
       {/* Grid */}
       <div className="row g-3">
+        { /* filter in-memory results by query (client-side) */ }
+        { /* we still use server pagination for full load/next */ }
+        
         {/* Loading skeletons */}
         {loading &&
           skeletons.map((_, i) => (
@@ -153,74 +179,86 @@ export default function Dashboard() {
         {/* Real cards */}
         {!loading && (
           <AnimatePresence initial={false}>
-            {cvs.map((cv, i) => (
-              <motion.div
-                className="col-md-6"
-                key={cv._id}
-                custom={i}
-                initial="hidden"
-                animate="show"
-                exit={{ opacity: 0, y: 10 }}
-                variants={cardVariants}
-              >
-                <div className="card h-100 border-0 shadow-sm card-hover">
-                  <div className="card-body">
-                    <div className="d-flex justify-content-between align-items-start">
-                      <div>
-                        <h5 className="card-title mb-1">
-                          {cv.profile?.name || "Untitled CV"}
-                        </h5>
-                        <div className="text-muted small">
-                          Updated {new Date(cv.updatedAt).toLocaleString()}
+            {cvs
+              .filter((cv) => {
+                if (!query) return true;
+                const q = query.toLowerCase();
+                return (
+                  (cv.profile?.name || "").toLowerCase().includes(q) ||
+                  (cv.profile?.email || "").toLowerCase().includes(q) ||
+                  (cv.profile?.city || "").toLowerCase().includes(q)
+                );
+              })
+              .map((cv, i) => (
+                <motion.div
+                  className="col-md-6"
+                  key={cv._id}
+                  custom={i}
+                  initial="hidden"
+                  animate="show"
+                  exit={{ opacity: 0, y: 10 }}
+                  variants={cardVariants}
+                >
+                  <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.995 }}>
+                    <div className="card h-100 border-0 shadow-sm card-hover">
+                      <div className="card-body">
+                        <div className="d-flex justify-content-between align-items-start">
+                          <div style={{ minWidth: 0 }}>
+                            <h5 className="card-title mb-1 text-truncate">
+                              {cv.profile?.name || "Untitled CV"}
+                            </h5>
+                            <div className="text-muted small">
+                              Updated {new Date(cv.updatedAt).toLocaleString()}
+                            </div>
+                          </div>
+                          <span className="badge bg-light text-dark border">
+                            {cv.template?.toUpperCase?.() || "CLASSIC"}
+                          </span>
+                        </div>
+
+                        {/* Quick meta */}
+                        <div className="mt-2 text-muted small text-truncate">
+                          {cv.profile?.email && (
+                            <>
+                              <i className="bi bi-envelope me-1" />
+                              {cv.profile.email}
+                              <span className="mx-2">•</span>
+                            </>
+                          )}
+                          {cv.profile?.city && (
+                            <>
+                              <i className="bi bi-geo-alt me-1" />
+                              {cv.profile.city}
+                            </>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="mt-3 d-flex flex-wrap gap-2">
+                          <Link className="btn btn-sm btn-outline-secondary" to={`/editor/${cv._id}`}>
+                            <i className="bi bi-pencil-square me-1" />
+                            Edit
+                          </Link>
+                          <Link className="btn btn-sm btn-outline-info" to={`/share/${cv._id}`}>
+                            <i className="bi bi-share me-1" />
+                            Share
+                          </Link>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => {
+                              setPayFor({ cvId: cv._id, action: "download" });
+                              setPayOpen(true);
+                            }}
+                          >
+                            <i className="bi bi-cloud-arrow-down me-1" />
+                            Pay & Download
+                          </button>
                         </div>
                       </div>
-                      <span className="badge bg-light text-dark border">
-                        {cv.template?.toUpperCase?.() || "CLASSIC"}
-                      </span>
                     </div>
-
-                    {/* Quick meta */}
-                    <div className="mt-2 text-muted small">
-                      {cv.profile?.email && (
-                        <>
-                          <i className="bi bi-envelope me-1" />
-                          {cv.profile.email}
-                          <span className="mx-2">•</span>
-                        </>
-                      )}
-                      {cv.profile?.city && (
-                        <>
-                          <i className="bi bi-geo-alt me-1" />
-                          {cv.profile.city}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="mt-3 d-flex flex-wrap gap-2">
-                      <Link className="btn btn-sm btn-outline-secondary" to={`/editor/${cv._id}`}>
-                        <i className="bi bi-pencil-square me-1" />
-                        Edit
-                      </Link>
-                      <Link className="btn btn-sm btn-outline-info" to={`/share/${cv._id}`}>
-                        <i className="bi bi-share me-1" />
-                        Share
-                      </Link>
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => {
-                          setPayFor({ cvId: cv._id, action: "download" });
-                          setPayOpen(true);
-                        }}
-                      >
-                        <i className="bi bi-cloud-arrow-down me-1" />
-                        Pay & Download
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                  </motion.div>
+                </motion.div>
+              ))}
           </AnimatePresence>
         )}
       </div>

@@ -20,6 +20,8 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
@@ -66,13 +68,17 @@ export default function Register() {
         password: form.password,
       });
       // auto-login then go to dashboard
-      login(data);
-      nav("/login");
+      await login(data);
+      nav("/dashboard");
     } catch (e) {
       setError(e?.response?.data?.message || "Registration failed");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOAuth = (provider) => {
+    window.location.href = `${API_BASE}/api/v1/auth/${provider}`;
   };
 
   return (
@@ -239,6 +245,39 @@ export default function Register() {
                     )}
                   </button>
                 </form>
+
+                {/* Divider */}
+                <div className="text-center my-3 position-relative">
+                  <hr />
+                  <span className="bg-white px-2 position-absolute top-50 start-50 translate-middle text-muted small">
+                    or continue with
+                  </span>
+                </div>
+
+                {/* OAuth Buttons */}
+                <div className="d-grid gap-2">
+                  <motion.button
+                    className="btn btn-outline-danger d-flex align-items-center justify-content-center"
+                    type="button"
+                    onClick={() => handleOAuth("google")}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <i className="bi bi-google me-2"></i>
+                    Continue with Google
+                  </motion.button>
+
+                  <motion.button
+                    className="btn btn-outline-primary d-flex align-items-center justify-content-center"
+                    type="button"
+                    onClick={() => handleOAuth("facebook")}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <i className="bi bi-facebook me-2"></i>
+                    Continue with Facebook
+                  </motion.button>
+                </div>
 
                 {/* Footer */}
                 <div className="text-center mt-4">

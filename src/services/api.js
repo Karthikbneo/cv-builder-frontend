@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:4000',
-  withCredentials: false
+  withCredentials: true
 })
 
 let accessToken = ''
@@ -25,7 +25,7 @@ api.interceptors.response.use(
       try {
         original._retry = true
 
-        // queue requests while refreshing
+     
         if (isRefreshing) {
           await new Promise((resolve) => pending.push(resolve))
         } else {
@@ -41,14 +41,14 @@ api.interceptors.response.use(
           isRefreshing = false
         }
 
-        // retry with new access token
+      
         original.headers = original.headers || {}
         original.headers.Authorization = `Bearer ${accessToken}`
         return api(original)
       } catch (e) {
         isRefreshing = false
         pending = []
-        // refresh failed — clear auth and bubble up
+  
         localStorage.removeItem('auth:user')
         localStorage.removeItem('auth:access')
         localStorage.removeItem('auth:refresh')

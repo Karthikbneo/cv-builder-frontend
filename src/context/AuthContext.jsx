@@ -1,39 +1,97 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import api from '../services/api.js'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import api from "../services/api.js";
 
-const Ctx = createContext(null)
+// ✅ The backend now stores tokens in HTTP-only cookies.
+// So we only need to manage `user` info on the client.
+
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const json = localStorage.getItem('auth:user')
-    return json ? JSON.parse(json) : null
-  })
-  const [access, setAccess] = useState(localStorage.getItem('auth:access') || '')
-  const [refresh, setRefresh] = useState(localStorage.getItem('auth:refresh') || '')
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // ---- Fetch current user (session hydration) ----
+  const fetchMe = useCallback(async () => {
+    try {
+      const { data } = await api.get("/api/v1/auth/me", { withCredentials: true });
+      if (data?.user) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch (err) {
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    api.setToken(access)
-  }, [access])
+    fetchMe();
+  }, [fetchMe]);
 
-  const login = (payload) => {
-    setUser(payload.user)
-    setAccess(payload.access)
-    setRefresh(payload.refresh)
-    localStorage.setItem('auth:user', JSON.stringify(payload.user))
-    localStorage.setItem('auth:access', payload.access)
-    localStorage.setItem('auth:refresh', payload.refresh)
-  }
+  // ---- LOGIN ----
+  const login = useCallback(async (credentials) => {
+    try {
+      const { data } = await api.post("/api/v1/auth/login", credentials, {
+        withCredentials: true,
+      });
+      setUser(data.user);
+      return { success: true };
+    } catch (err) {
+      console.error("Login failed", err);
+      return { success: false, message: err?.response?.data?.message || "Login failed" };
+    }
+  }, []);
 
-  const logout = () => {
-    setUser(null); setAccess(''); setRefresh('')
-    localStorage.removeItem('auth:user')
-    localStorage.removeItem('auth:access')
-    localStorage.removeItem('auth:refresh')
-    api.setToken('')
-  }
+  // ---- REGISTER ----
+  const register = useCallback(async (payload) => {
+    try {
+      const { data } = await api.post("/api/v1/auth/register", payload, {
+        withCredentials: true,
+      });
+      setUser(data.user);
+      return { success: true };
+    } catch (err) {
+      console.error("Registration failed", err);
+      return { success: false, message: err?.response?.data?.message || "Registration failed" };
+    }
+  }, []);
 
-  const value = { user, access, refresh, login, logout }
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>
+  // ---- LOGOUT ----
+  const logout = useCallback(async () => {
+    try {
+      await api.post("/api/v1/auth/logout", {}, { withCredentials: true });
+    } catch (err) {
+      console.warn("Logout failed (ignored)", err);
+    } finally {
+      setUser(null);
+    }
+  }, []);
+
+  const isAuthenticated = !!user;
+
+  const value = {
+    user,
+    loading,
+    isAuthenticated,
+    login,
+    register,
+    logout,
+    refreshUser: fetchMe,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 }
 
-export const useAuth = () => useContext(Ctx)
+export const useAuth = () => useContext(AuthContext);

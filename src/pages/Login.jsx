@@ -13,6 +13,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
     setForm((f) => ({ ...f, [name]: type === "checkbox" ? checked : value }));
@@ -41,6 +43,11 @@ export default function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // OAuth login handler
+  const handleOAuth = (provider) => {
+    window.location.href = `${API_BASE}/api/v1/auth/${provider}`;
   };
 
   return (
@@ -75,7 +82,9 @@ export default function Login() {
                     <i className="bi bi-person-vcard-fill fs-3 text-primary"></i>
                   </div>
                   <h3 className="fw-bold mb-0">Welcome back</h3>
-                  <div className="text-muted small">Sign in to continue to CV Builder</div>
+                  <div className="text-muted small">
+                    Sign in to continue to CV Builder
+                  </div>
                 </motion.div>
 
                 {/* Form */}
@@ -93,7 +102,9 @@ export default function Login() {
                   </div>
 
                   <div>
-                    <label className="form-label small text-muted">Password</label>
+                    <label className="form-label small text-muted">
+                      Password
+                    </label>
                     <div className="input-group input-group-lg">
                       <input
                         name="password"
@@ -109,24 +120,28 @@ export default function Login() {
                         onClick={() => setShowPw((s) => !s)}
                         tabIndex={-1}
                       >
-                        <i className={`bi ${showPw ? "bi-eye-slash" : "bi-eye"}`}></i>
+                        <i
+                          className={`bi ${
+                            showPw ? "bi-eye-slash" : "bi-eye"
+                          }`}
+                        ></i>
                       </button>
                     </div>
-                    <div className="d-flex justify-content-between align-items-center mt-2">
-                      <div className="form-check">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="remember"
-                          name="remember"
-                          checked={form.remember}
-                          onChange={onChange}
-                        />
-                        <label className="form-check-label small" htmlFor="remember">
-                          Remember me
-                        </label>
-                      </div>
-                     
+                    <div className="form-check mt-2">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="remember"
+                        name="remember"
+                        checked={form.remember}
+                        onChange={onChange}
+                      />
+                      <label
+                        className="form-check-label small"
+                        htmlFor="remember"
+                      >
+                        Remember me
+                      </label>
                     </div>
                   </div>
 
@@ -151,7 +166,10 @@ export default function Login() {
                   >
                     {loading ? (
                       <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status" />
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                        />
                         Signing in…
                       </>
                     ) : (
@@ -160,11 +178,47 @@ export default function Login() {
                   </motion.button>
                 </form>
 
+                {/* Divider */}
+                <div className="text-center my-3 position-relative">
+                  <hr />
+                  <span className="bg-white px-2 position-absolute top-50 start-50 translate-middle text-muted small">
+                    or continue with
+                  </span>
+                </div>
+
+                {/* OAuth Buttons */}
+                <div className="d-grid gap-2">
+                  <motion.button
+                    className="btn btn-outline-danger d-flex align-items-center justify-content-center"
+                    type="button"
+                    onClick={() => handleOAuth("google")}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <i className="bi bi-google me-2"></i>
+                    Continue with Google
+                  </motion.button>
+
+                  <motion.button
+                    className="btn btn-outline-primary d-flex align-items-center justify-content-center"
+                    type="button"
+                    onClick={() => handleOAuth("facebook")}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <i className="bi bi-facebook me-2"></i>
+                    Continue with Facebook
+                  </motion.button>
+                </div>
+
                 {/* Footer */}
                 <div className="text-center mt-4">
                   <span className="text-muted small">
                     Don’t have an account?{" "}
-                    <Link to="/register" className="text-decoration-none fw-semibold">
+                    <Link
+                      to="/register"
+                      className="text-decoration-none fw-semibold"
+                    >
                       Create one
                     </Link>
                   </span>

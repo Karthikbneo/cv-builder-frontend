@@ -1,8 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import Logoo from "../../public/images/looogo.png";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export default function Home() {
+  const { isAuthenticated } = useAuth();
   return (
     <>
       {/* Hero Section */}
@@ -17,12 +19,16 @@ export default function Home() {
               modern layouts and easy-to-use editor.
             </p>
             <div className="d-flex gap-3">
-              <Link to="/register" className="btn btn-primary btn-lg">
-                Get Started
-              </Link>
-              <Link to="/login" className="btn btn-outline-secondary btn-lg">
-                Sign In
-              </Link>
+              {!isAuthenticated && (
+                <>
+                  <Link to="/register" className="btn btn-primary btn-lg">
+                    Get Started
+                  </Link>
+                  <Link to="/login" className="btn btn-outline-secondary btn-lg">
+                    Sign In
+                  </Link>
+                </>
+              )}
             </div>
           </div>
           <img
